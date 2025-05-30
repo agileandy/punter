@@ -1,6 +1,6 @@
 # Punter Game Refactoring Plan
 
-This document outlines a comprehensive plan to refactor the Punter game codebase into smaller, more maintainable modules with a maximum of 400-500 lines per file.
+This document outlines a comprehensive plan to refactor the Punter game codebase into smaller, more maintainable modules with a maximum of 400-500 lines per file. The refactoring aims to improve code organization, maintainability, and developer experience.
 
 ## Current State
 
