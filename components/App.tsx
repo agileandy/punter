@@ -6,18 +6,19 @@ import LoadingSpinner from './LoadingSpinner';
 import HorseCard from './HorseCard';
 import Modal from './Modal';
 import {
-  Horse, Jockey, Race, Bet, Player, BetType, RaceFinishOrderEntry, PastRaceResult, 
+  Horse, Jockey, Race, Bet, Player, BetType, RaceFinishOrderEntry, PastRaceResult,
   RaceSnapshot, MonteCarloSummary, HorseGrade, DNFReason, ParticipantSnapshotState, RaceParticipantFullData,
   GeminiRaceSummary
 } from '../types';
-import * as gameLogic from '../services/gameLogic'; 
+import * as gameLogic from '../services/gameLogic';
+import { createInitialJockeys } from '../services/generation/jockeyGenerator';
 import { GoogleGenAI } from "@google/genai";
-import { 
-    INITIAL_PLAYER_CURRENCY, MIN_BET_AMOUNT, MONTE_CARLO_ITERATIONS, 
+import {
+    INITIAL_PLAYER_CURRENCY, MIN_BET_AMOUNT, MONTE_CARLO_ITERATIONS,
     MIN_HORSES_PER_RACE, INITIAL_GAME_YEAR, MIN_DAYS_BETWEEN_RACES, MAX_DAYS_BETWEEN_RACES,
     MAX_HORSE_AGE, AGE_DEVELOPMENT_PEAK, GRADES_ORDER, FORM_RATINGS_ORDER, MAX_PLAYERS,
-    AUTOPILOT_BASE_POST_RACE_DELAY_MS, AUTOPILOT_BET_TURN_DELAY_MS, 
-    BASE_SIMULATION_STEP_INTERVAL_MS, MANUAL_SIMULATION_SPEED_MULTIPLIER, 
+    AUTOPILOT_BASE_POST_RACE_DELAY_MS, AUTOPILOT_BET_TURN_DELAY_MS,
+    BASE_SIMULATION_STEP_INTERVAL_MS, MANUAL_SIMULATION_SPEED_MULTIPLIER,
     DEFAULT_NUM_HORSES_IN_GAME, MIN_HORSES_SETUP, MAX_HORSES_SETUP,
     DEFAULT_NUM_JOCKEYS_IN_GAME, MIN_JOCKEYS_SETUP, MAX_JOCKEYS_SETUP,
     WINS_FOR_GUARANTEED_PROMOTION_CHANCE, RACES_IN_GRADE_FOR_PROMOTION_CONSIDERATION, RACES_FOR_DEMOTION_REVIEW, DEMOTION_PERFORMANCE_THRESHOLD_POSITION,
@@ -27,7 +28,7 @@ import { ArrowPathIcon, InformationCircleIcon, ListBulletIcon, PlayIcon, Banknot
 import { StarIcon, UserCircleIcon } from '@heroicons/react/24/solid';
 
 const horseSpriteColors = [
-  'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 
+  'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500',
   'bg-pink-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-cyan-500',
   'bg-lime-500', 'bg-emerald-500', 'bg-rose-500', 'bg-sky-500', 'bg-violet-500'
 ];
@@ -67,49 +68,51 @@ try {
 const App: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
-  
+
   // Setup State
   const [numberOfPlayersForSetup, setNumberOfPlayersForSetup] = useState<number>(1);
-  const [playerNamesForSetup, setPlayerNamesForSetup] = useState<string[]>(Array(MAX_PLAYERS).fill('').map((_, i) => `Player ${i + 1}`));
+  const [playerNamesForSetup, setPlayerNamesForSetup] = useState<string[]>(
+    Array(MAX_PLAYERS).fill('').map((_: unknown, i: number) => `Player ${i + 1}`)
+  );
   const [numberOfHorsesForSetup, setNumberOfHorsesForSetup] = useState<number>(MIN_HORSES_SETUP);
   const [generateHistoryForSetup, setGenerateHistoryForSetup] = useState<boolean>(true);
   const [numberOfJockeysForSetup, setNumberOfJockeysForSetup] = useState<number>(MIN_JOCKEYS_SETUP);
 
   const [gameStage, setGameStage] = useState<GameStage>('setup');
-  
+
   const [allHorses, setAllHorses] = useState<Horse[]>([]);
   const [allJockeys, setAllJockeys] = useState<Jockey[]>([]);
-  
+
   const [currentRace, setCurrentRace] = useState<Race | null>(null);
   const [activeBetsThisRace, setActiveBetsThisRace] = useState<{ [playerId: string]: Bet[] }>({});
-  
-  const [raceResults, setRaceResults] = useState<RaceFinishOrderEntry[] | null>(null); 
+
+  const [raceResults, setRaceResults] = useState<RaceFinishOrderEntry[] | null>(null);
   const [simulationSnapshots, setSimulationSnapshots] = useState<RaceSnapshot[]>([]);
   const [currentSnapshotIndex, setCurrentSnapshotIndex] = useState<number>(0);
   const [isSimulatingLive, setIsSimulatingLive] = useState<boolean>(false);
   const [finalSimResultsForProcessing, setFinalSimResultsForProcessing] = useState<RaceFinishOrderEntry[] | null>(null);
 
-  const [isLoading, setIsLoading] = useState<boolean>(true); 
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isMonteCarloRunning, setIsMonteCarloRunning] = useState<boolean>(false);
   const [monteCarloDebugData, setMonteCarloDebugData] = useState<MonteCarloSummary | null>(null);
   const [showMonteCarloDebugModal, setShowMonteCarloDebugModal] = useState<boolean>(false);
-  const [isDebugMode, setIsDebugMode] = useState<boolean>(true); 
+  const [isDebugMode, setIsDebugMode] = useState<boolean>(true);
 
   const [gameMessages, setGameMessages] = useState<string[]>([]);
-  
+
   const [selectedHorseForBet, setSelectedHorseForBet] = useState<Horse | null>(null);
   const [betStake, setBetStake] = useState<string>(MIN_BET_AMOUNT.toString());
   const [betType, setBetType] = useState<BetType>(BetType.Win);
-  
+
   const [showHorseListModal, setShowHorseListModal] = useState<boolean>(false);
   const [selectedHorseForDetails, setSelectedHorseForDetails] = useState<Horse | null>(null);
   const [showGradeHelpModal, setShowGradeHelpModal] = useState<boolean>(false);
 
-  const [gameDate, setGameDate] = useState<Date>(new Date(INITIAL_GAME_YEAR, 0, 1)); 
+  const [gameDate, setGameDate] = useState<Date>(new Date(INITIAL_GAME_YEAR, 0, 1));
 
   const [isAutopilotMode, setIsAutopilotMode] = useState<boolean>(false);
   const [autopilotSpeedMultiplier, setAutopilotSpeedMultiplier] = useState<number>(10);
-  
+
   const [horseListSortConfig, setHorseListSortConfig] = useState<HorseSortConfig>({ key: 'grade', direction: 'desc' });
 
   const [raceSummaryData, setRaceSummaryData] = useState<GeminiRaceSummary | null>(null);
@@ -130,63 +133,63 @@ const App: React.FC = () => {
       if(isAutopilotMode && players.length > 0) setTimeout(() => handleNewRace(players, players[0]?.id), AUTOPILOT_BASE_POST_RACE_DELAY_MS / autopilotSpeedMultiplier);
       return;
     }
-    
+
     if (!raceToSimulate.participants || raceToSimulate.participants.length === 0) {
         addGameMessage("Error: Cannot start simulation, provided race has no participants.");
         setGameStage(isAutopilotMode ? 'raceResults' : 'betting');
         setIsSimulatingLive(false);
         setIsLoading(false);
-        setCurrentRace(null); 
+        setCurrentRace(null);
         if(isAutopilotMode && players.length > 0) setTimeout(() => handleNewRace(players, players[0]?.id), AUTOPILOT_BASE_POST_RACE_DELAY_MS / autopilotSpeedMultiplier);
         return;
     }
 
-    setIsLoading(true); 
+    setIsLoading(true);
     setIsSimulatingLive(true);
     setCurrentSnapshotIndex(0);
     setGameStage('raceInProgress');
-    setSimulationSnapshots([]); 
+    setSimulationSnapshots([]);
     setRaceSummaryData(null); // Clear previous summary
     setIsFastForwardingRaceEnd(false); // Reset for new race
 
     try {
       const { snapshots, finalResults } = gameLogic.simulateRace(raceToSimulate);
-      
+
       if (!snapshots || !Array.isArray(snapshots) || snapshots.length === 0) {
         console.error("Race simulation returned invalid or empty snapshots.", snapshots);
         addGameMessage("Error: Simulation generated no data. Race cannot be displayed.");
-        setGameStage('raceResults'); 
+        setGameStage('raceResults');
         setIsSimulatingLive(false);
-        setRaceResults([]); 
-        setFinalSimResultsForProcessing(null); 
+        setRaceResults([]);
+        setFinalSimResultsForProcessing(null);
       } else {
         setSimulationSnapshots(snapshots);
-        setFinalSimResultsForProcessing(finalResults); 
+        setFinalSimResultsForProcessing(finalResults);
       }
     } catch (error: any) {
       console.error("Critical error during race simulation:", error);
       addGameMessage(`Error during race simulation: ${error.message || 'Unknown error'}. Race aborted.`);
-      setGameStage('raceResults'); 
+      setGameStage('raceResults');
       setIsSimulatingLive(false);
-      setRaceResults([]); 
+      setRaceResults([]);
       setFinalSimResultsForProcessing(null);
     } finally {
-      setIsLoading(false); 
+      setIsLoading(false);
     }
-  }, [addGameMessage, isAutopilotMode, players, autopilotSpeedMultiplier]); 
+  }, [addGameMessage, isAutopilotMode, players, autopilotSpeedMultiplier]);
 
   const resetGameState = useCallback((isFullReset: boolean = true) => {
     console.log(`DEBUG: resetGameState called. isFullReset: ${isFullReset}`);
     if (isFullReset) {
-      setPlayers([]); 
+      setPlayers([]);
       setCurrentPlayerId(null);
-      setGameStage('setup'); 
+      setGameStage('setup');
       setNumberOfPlayersForSetup(1);
       setPlayerNamesForSetup(Array(MAX_PLAYERS).fill('').map((_, i) => `Player ${i + 1}`));
       setNumberOfHorsesForSetup(MIN_HORSES_SETUP);
       setGenerateHistoryForSetup(true);
       setNumberOfJockeysForSetup(MIN_JOCKEYS_SETUP);
-      
+
       // Use MIN_..._SETUP for initial horse/jockey pool on full reset, consistent with setup defaults
       setAllHorses(gameLogic.createInitialHorses(MIN_HORSES_SETUP, true));
       setAllJockeys(gameLogic.createInitialJockeys(MIN_JOCKEYS_SETUP));
@@ -205,7 +208,7 @@ const App: React.FC = () => {
     setBetType(BetType.Win);
     setRaceSummaryData(null);
     setIsFastForwardingRaceEnd(false);
-    
+
     if (isFullReset) {
         setGameDate(new Date(INITIAL_GAME_YEAR, 0, 1));
         setGameMessages(["Game reset. Set up new game."]);
@@ -213,23 +216,23 @@ const App: React.FC = () => {
     setIsLoading(false);
     console.log(`DEBUG: resetGameState finished. New gameStage: ${isFullReset ? 'setup' : gameStage}`);
   }, [gameStage]); // Removed setup state vars from deps as they are reset within
-  
+
   useEffect(() => {
     // Initialize with minimums, consistent with new setup defaults
     const initialHorses = gameLogic.createInitialHorses(MIN_HORSES_SETUP, generateHistoryForSetup);
     const initialJockeys = gameLogic.createInitialJockeys(MIN_JOCKEYS_SETUP);
     setAllHorses(initialHorses);
     setAllJockeys(initialJockeys);
-    setIsLoading(false); 
+    setIsLoading(false);
   }, [generateHistoryForSetup]); // Corrected dependency from empty array
 
 
   const handleDoneBettingOrPass = useCallback(() => {
-    if (!currentPlayerId || !players.length || isAutopilotMode) return; 
+    if (!currentPlayerId || !players.length || isAutopilotMode) return;
 
     const currentPlayerIndex = players.findIndex(p => p.id === currentPlayerId);
     const player = players[currentPlayerIndex];
-    
+
     addGameMessage(`${player.name} finished betting.`);
 
     setSelectedHorseForBet(null);
@@ -247,7 +250,7 @@ const App: React.FC = () => {
         startRaceSimulation(currentRace);
       } else {
         addGameMessage("Error: Race data not available to start simulation. Please generate a new race.");
-        setGameStage('betting'); 
+        setGameStage('betting');
       }
     }
   }, [currentPlayerId, players, addGameMessage, isAutopilotMode, currentRace, startRaceSimulation]);
@@ -255,25 +258,25 @@ const App: React.FC = () => {
   const handleNewRace = useCallback(async (
     initialPlayersListParam: Player[],
     initialPlayerIdForThisRaceContext?: string,
-    initialHorsesForThisRaceContext?: Horse[] 
+    initialHorsesForThisRaceContext?: Horse[]
     ) => {
     console.log(`DEBUG: handleNewRace called. Autopilot: ${isAutopilotMode}`);
     const currentPlayersList = initialPlayersListParam;
 
     if (!currentPlayersList || currentPlayersList.length === 0) {
       addGameMessage("Cannot start a new race: No players defined. Please complete setup.");
-      setIsLoading(false); 
-      if (players.length === 0) setGameStage('setup'); 
+      setIsLoading(false);
+      if (players.length === 0) setGameStage('setup');
       return;
     }
-    
+
     let currentAllHorses = initialHorsesForThisRaceContext || allHorses;
     let currentAllJockeys = allJockeys;
 
     // Ensure horse/jockey pools are populated if they somehow became empty, using setup defaults
     if (currentAllHorses.length === 0 && !initialHorsesForThisRaceContext) {
       const newHorses = gameLogic.createInitialHorses(numberOfHorsesForSetup, generateHistoryForSetup);
-      setAllHorses(newHorses); currentAllHorses = newHorses; 
+      setAllHorses(newHorses); currentAllHorses = newHorses;
       addGameMessage(`DEBUG: Horses repopulated in handleNewRace (was ${currentAllHorses.length}, now ${newHorses.length}) using setup values.`);
     }
     if (currentAllJockeys.length === 0) {
@@ -281,7 +284,7 @@ const App: React.FC = () => {
       setAllJockeys(newJockeys); currentAllJockeys = newJockeys;
       addGameMessage(`DEBUG: Jockeys repopulated in handleNewRace (was ${currentAllJockeys.length}, now ${newJockeys.length}) using setup values.`);
     }
-    
+
     const targetBettingPlayerId = initialPlayerIdForThisRaceContext || currentPlayersList[0]?.id;
 
     setIsLoading(true);
@@ -295,24 +298,24 @@ const App: React.FC = () => {
     setIsSimulatingLive(false);
     setFinalSimResultsForProcessing(null);
     setMonteCarloDebugData(null);
-    setCurrentRace(null); 
+    setCurrentRace(null);
     setRaceSummaryData(null);
     setIsFastForwardingRaceEnd(false);
-    
+
     setCurrentPlayerId(targetBettingPlayerId);
     if (!isAutopilotMode) {
-      setGameStage('betting'); 
+      setGameStage('betting');
     }
-    
-    let horsesForAgingCalc = [...currentAllHorses]; 
+
+    let horsesForAgingCalc = [...currentAllHorses];
     const daysForward = gameLogic.getRandomInt(MIN_DAYS_BETWEEN_RACES, MAX_DAYS_BETWEEN_RACES);
-    const nextRaceDate = new Date(gameDate); 
-    const prevGameDateForAgingCheck = new Date(gameDate); 
+    const nextRaceDate = new Date(gameDate);
+    const prevGameDateForAgingCheck = new Date(gameDate);
     nextRaceDate.setDate(prevGameDateForAgingCheck.getDate() + daysForward);
     let agingMessages = "";
     const isNotInitialSetupRace = gameDate.getFullYear() !== INITIAL_GAME_YEAR || gameDate.getMonth() !== 0 || gameDate.getDate() !== 1;
-    
-    if (isNotInitialSetupRace && nextRaceDate.getFullYear() > prevGameDateForAgingCheck.getFullYear()) { 
+
+    if (isNotInitialSetupRace && nextRaceDate.getFullYear() > prevGameDateForAgingCheck.getFullYear()) {
         const yearsPassed = nextRaceDate.getFullYear() - prevGameDateForAgingCheck.getFullYear();
         agingMessages += ` ${yearsPassed} year(s) passed! Horses aged.`;
         horsesForAgingCalc = horsesForAgingCalc.map(h => {
@@ -321,7 +324,7 @@ const App: React.FC = () => {
             let newStamina = h.stamina;
             let newAcceleration = h.acceleration;
             for (let y = 0; y < yearsPassed; y++) {
-                const ageAfterThisYearPass = newAge + 1; 
+                const ageAfterThisYearPass = newAge + 1;
                 if (ageAfterThisYearPass <= AGE_DEVELOPMENT_PEAK -1) {
                     newSpeed = Math.min(100, newSpeed + gameLogic.getRandomInt(1, 3));
                     newStamina = Math.min(100, newStamina + gameLogic.getRandomInt(1, 3));
@@ -345,36 +348,36 @@ const App: React.FC = () => {
                 newAge = ageAfterThisYearPass;
             }
             return {...h, age: newAge, speed: newSpeed, stamina: newStamina, acceleration: newAcceleration};
-        }).filter(h => h.age <= MAX_HORSE_AGE); 
-        
-        const numToReplace = numberOfHorsesForSetup - horsesForAgingCalc.length; 
+        }).filter(h => h.age <= MAX_HORSE_AGE);
+
+        const numToReplace = numberOfHorsesForSetup - horsesForAgingCalc.length;
         if (numToReplace > 0) {
             const newYoungHorses = gameLogic.createInitialHorses(numToReplace, generateHistoryForSetup).map(h => ({...h, age: gameLogic.getRandomInt(2,3)}));
             horsesForAgingCalc.push(...newYoungHorses);
             agingMessages += ` ${numToReplace} new young horses entered the league.`;
         }
-        setAllHorses(horsesForAgingCalc); 
+        setAllHorses(horsesForAgingCalc);
     }
-    if (isNotInitialSetupRace || currentPlayersList.length > 0) { 
+    if (isNotInitialSetupRace || currentPlayersList.length > 0) {
       setGameDate(nextRaceDate);
     }
 
     try {
         const { raceData, monteCarloSummary } = await gameLogic.generateRaceWithMonteCarlo(horsesForAgingCalc, currentAllJockeys, nextRaceDate, isDebugMode, MONTE_CARLO_ITERATIONS);
-        
+
         if(raceData.participants.length < MIN_HORSES_PER_RACE){
             addGameMessage(`Not enough suitable horses for a ${raceData.targetSpeedBandName || raceData.targetRaceGrade} race. Trying again...${agingMessages}`);
             if (isAutopilotMode) {
                 const firstPlayerOfCurrentGame = currentPlayersList[0]?.id;
                 setTimeout(() => handleNewRace(currentPlayersList, firstPlayerOfCurrentGame), AUTOPILOT_BASE_POST_RACE_DELAY_MS / autopilotSpeedMultiplier);
             } else {
-                 setIsLoading(false); 
+                 setIsLoading(false);
                  setIsMonteCarloRunning(false);
             }
         } else {
             setCurrentRace(raceData);
             setMonteCarloDebugData(monteCarloSummary);
-            setActiveBetsThisRace({}); 
+            setActiveBetsThisRace({});
 
             if (isAutopilotMode) {
                 addGameMessage(`Autopilot: Starting new race - ${raceData.name}. ${agingMessages}`);
@@ -409,15 +412,15 @@ const App: React.FC = () => {
     const jockeysToCreate = gameLogic.createInitialJockeys(numberOfJockeysForSetup);
     setAllHorses(horsesToCreate);
     setAllJockeys(jockeysToCreate);
-    
+
     if (isAutopilotMode) {
         addGameMessage(`${numPlayers} player game started with Autopilot ON. Universe has ${horsesToCreate.length} horses and ${jockeysToCreate.length} jockeys.`);
     } else {
         setCurrentPlayerId(newPlayers[0].id);
-        setGameStage('betting'); 
+        setGameStage('betting');
         addGameMessage(`${numPlayers} player game started! ${newPlayers[0].name}'s turn to bet. Universe has ${horsesToCreate.length} horses and ${jockeysToCreate.length} jockeys.`);
     }
-    handleNewRace(newPlayers, newPlayers[0].id, horsesToCreate); 
+    handleNewRace(newPlayers, newPlayers[0].id, horsesToCreate);
   };
 
 
@@ -463,17 +466,17 @@ const App: React.FC = () => {
       oddsAtBetTime: participant.odds,
       playerId: currentPlayerId,
     };
-    
+
     setActiveBetsThisRace(prev => ({
         ...prev,
         [currentPlayerId]: [...(prev[currentPlayerId] || []), newBet]
     }));
 
-    setPlayers(prevPlayers => prevPlayers.map(p => 
+    setPlayers(prevPlayers => prevPlayers.map(p =>
         p.id === currentPlayerId ? { ...p, currency: p.currency - stakeAmount } : p
     ));
     addGameMessage(`${currentPlayer.name} bet $${stakeAmount} on ${selectedHorseForBet.name} to ${betType}. Odds: ${gameLogic.formatOddsForDisplay(participant.odds)}.`);
-    setSelectedHorseForBet(null); 
+    setSelectedHorseForBet(null);
     setBetStake(MIN_BET_AMOUNT.toString());
   };
 
@@ -484,11 +487,11 @@ const App: React.FC = () => {
     raceDistanceMeters: number
   ): { position: number | null, speed: number | null } => {
       if (allSnapshots.length === 0) return { position: null, speed: null };
-  
+
       let closestSnapshot: ParticipantSnapshotState | null = null;
       let bestSnapshotOverall: RaceSnapshot | null = null;
       let minDistanceDiff = Infinity;
-  
+
       // Find the snapshot where the leader is closest to or just past the targetDistance
       for (const snap of allSnapshots) {
           const leaderDist = Math.max(...snap.participantStates.map(p => p.distanceCovered));
@@ -499,12 +502,12 @@ const App: React.FC = () => {
           }
           if (leaderDist >= raceDistanceMeters) break; // Stop if race is effectively over
       }
-      
+
       if (!bestSnapshotOverall) return { position: null, speed: null };
 
       const participantsInSnapshot = [...bestSnapshotOverall.participantStates].sort((a, b) => b.distanceCovered - a.distanceCovered);
       const targetParticipantState = participantsInSnapshot.find(p => p.horseId === horseId);
-  
+
       if (targetParticipantState) {
           const position = participantsInSnapshot.indexOf(targetParticipantState) + 1;
           return { position, speed: targetParticipantState.currentSpeed };
@@ -514,8 +517,8 @@ const App: React.FC = () => {
 
 
   const generateRaceSummaryNarrative = async (
-        race: Race, 
-        results: RaceFinishOrderEntry[], 
+        race: Race,
+        results: RaceFinishOrderEntry[],
         snapshots: RaceSnapshot[]
     ): Promise<GeminiRaceSummary | null> => {
         if (!ai) {
@@ -528,7 +531,7 @@ const App: React.FC = () => {
         const raceDistanceMeters = parseInt(race.distance.replace('m', ''));
 
         const winnerEntry = results.find(r => r.finishPosition === 1 && !r.participant.status);
-        
+
         const keyHorseDetailsForPrompt: string[] = [];
         const horseIdsForPrompt: string[] = [];
 
@@ -557,10 +560,10 @@ const App: React.FC = () => {
                 }
             }
         }
-        
+
         // Strong Finisher (Top 3, not winner, and made up ground)
-        const strongFinishers = results.filter(r => 
-            !r.participant.status && 
+        const strongFinishers = results.filter(r =>
+            !r.participant.status &&
             r.finishPosition > 1 && r.finishPosition <= 3 &&
             r.participant.horse.id !== winnerEntry?.participant.horse.id &&
             !horseIdsForPrompt.includes(r.participant.horse.id)
@@ -572,7 +575,7 @@ const App: React.FC = () => {
             if (finisherPosAtHalf.position && finisherPosAtHalf.position > finisherEntry.finishPosition + 1 && finisherPosAtHalf.position > 3) {
                 keyHorseDetailsForPrompt.push(`- ${finisher.horse.name} (ID: ${finisher.horse.id}): Strong Finisher`);
                 horseIdsForPrompt.push(finisher.horse.id);
-                break; 
+                break;
             }
         }
 
@@ -608,15 +611,15 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                 contents: prompt,
                 config: { temperature: 0.6, topP: 0.9, responseMimeType: "application/json" }
             });
-            
-            let jsonStr = response.text.trim();
+
+            let jsonStr = response.text?.trim() || '';
             // Remove potential markdown fences if Gemini adds them despite instruction
             const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
             const match = jsonStr.match(fenceRegex);
             if (match && match[2]) {
               jsonStr = match[2].trim();
             }
-            
+
             const parsedData = JSON.parse(jsonStr) as GeminiRaceSummary;
             setIsGeneratingSummary(false);
             return parsedData;
@@ -631,7 +634,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
   const processRaceEndLogic = useCallback(() => {
     if (finalSimResultsForProcessing && currentRace) {
         setRaceResults(finalSimResultsForProcessing);
-        
+
         let allBetOutcomeMessages: string[] = [];
         let settledPlayersList: Player[] = players; // Capture current players state for autopilot context
 
@@ -664,10 +667,10 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
             settledPlayersList = playersStateAfterBetsSettled; // Update captured list
             return playersStateAfterBetsSettled;
         });
-        
+
         if(allBetOutcomeMessages.length > 0) {
             setGameMessages(prev => [...allBetOutcomeMessages, ...prev.slice(0, Math.max(0, 5-allBetOutcomeMessages.length))]);
-        } else if (!isAutopilotMode) { 
+        } else if (!isAutopilotMode) {
             addGameMessage("Race finished! No bets were placed for this race.");
         } else {
              addGameMessage("Autopilot race finished.");
@@ -675,7 +678,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
 
         let updatedHorsesListInterim = allHorses.map(horse => {
           const resultEntry = finalSimResultsForProcessing.find(r => r.participant.horse.id === horse.id);
-          if (resultEntry && currentRace) { 
+          if (resultEntry && currentRace) {
             const prize = gameLogic.getPrizeDistribution(currentRace.purse, resultEntry.finishPosition, currentRace.participants.length, !!resultEntry.participant.status);
             const pastRaceEntry: PastRaceResult = {
               raceId: currentRace.id, raceName: currentRace.name, trackName: currentRace.trackName,
@@ -690,7 +693,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
           }
           return horse;
         });
-        
+
         generateRaceSummaryNarrative(currentRace, finalSimResultsForProcessing, simulationSnapshots)
             .then(summaryData => {
                 setRaceSummaryData(summaryData);
@@ -700,9 +703,9 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                         if (raceResultForThisHorse && summaryData.horseSentences[horse.id]) {
                             return {
                                 ...horse,
-                                raceHistory: horse.raceHistory.map(hr => 
-                                    hr.raceId === currentRace?.id 
-                                    ? { ...hr, horseSpecificSummarySentence: summaryData.horseSentences[horse.id] } 
+                                raceHistory: horse.raceHistory.map(hr =>
+                                    hr.raceId === currentRace?.id
+                                    ? { ...hr, horseSpecificSummarySentence: summaryData.horseSentences[horse.id] }
                                     : hr
                                 )
                             };
@@ -732,7 +735,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
           return jockey;
         });
         setAllJockeys(updatedJockeysList);
-        
+
     } else {
         addGameMessage("Could not process race results: critical data missing for final processing stage.");
         if (isAutopilotMode && players.length > 0) {
@@ -763,8 +766,8 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
         }, 1000); // Show "Finishing Race..." for 1s
 
     } else if (isSimulatingLive && simulationSnapshots.length > 0 && currentSnapshotIndex < simulationSnapshots.length - 1) {
-        const delay = isAutopilotMode 
-                        ? BASE_SIMULATION_STEP_INTERVAL_MS / autopilotSpeedMultiplier 
+        const delay = isAutopilotMode
+                        ? BASE_SIMULATION_STEP_INTERVAL_MS / autopilotSpeedMultiplier
                         : BASE_SIMULATION_STEP_INTERVAL_MS / MANUAL_SIMULATION_SPEED_MULTIPLIER;
         mainTimer = setTimeout(() => {
             const nextSnapshotIndex = currentSnapshotIndex + 1;
@@ -782,7 +785,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                     setCurrentSnapshotIndex(prev => prev + 1);
                 }
             } else {
-                 setCurrentSnapshotIndex(prev => prev + 1); 
+                 setCurrentSnapshotIndex(prev => prev + 1);
             }
         }, Math.max(1, delay));
 
@@ -794,9 +797,9 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
         if (mainTimer) clearTimeout(mainTimer);
     };
   }, [
-    isSimulatingLive, currentSnapshotIndex, simulationSnapshots, 
-    isFastForwardingRaceEnd, currentRace, 
-    processRaceEndLogic, 
+    isSimulatingLive, currentSnapshotIndex, simulationSnapshots,
+    isFastForwardingRaceEnd, currentRace,
+    processRaceEndLogic,
     isAutopilotMode, autopilotSpeedMultiplier,
     MANUAL_SIMULATION_SPEED_MULTIPLIER, BASE_SIMULATION_STEP_INTERVAL_MS // Constants are stable
   ]);
@@ -805,14 +808,14 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
   const handleToggleAutopilot = useCallback(() => {
     const newAutopilotState = !isAutopilotMode;
     setIsAutopilotMode(newAutopilotState);
-    
+
     if (newAutopilotState) {
         addGameMessage(`Autopilot Enabled (Speed: ${autopilotSpeedMultiplier}x).`);
         if (gameStage === 'betting' && currentPlayerId && currentRace && currentRace.participants.length >= MIN_HORSES_PER_RACE && !isLoading) {
             addGameMessage("Autopilot engaged during betting. Starting race with current bets...");
             setGameStage('raceInProgress');
-            startRaceSimulation(currentRace); 
-        } else if (gameStage === 'raceResults' && !isLoading) { 
+            startRaceSimulation(currentRace);
+        } else if (gameStage === 'raceResults' && !isLoading) {
             const autopilotDelay = Math.max(1, AUTOPILOT_BASE_POST_RACE_DELAY_MS / autopilotSpeedMultiplier);
             addGameMessage("Autopilot: Scheduling next race from results.");
             setTimeout(() => handleNewRace(players, players[0]?.id), autopilotDelay);
@@ -826,7 +829,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
         }
     }
   }, [isAutopilotMode, autopilotSpeedMultiplier, gameStage, currentPlayerId, isLoading, players, currentRace, handleNewRace, addGameMessage, startRaceSimulation]);
-  
+
   const sortHorses = (horses: Horse[], config: HorseSortConfig): Horse[] => {
     return [...horses].sort((a, b) => {
         let valA: string | number | null, valB: string | number | null;
@@ -844,8 +847,8 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
             default: valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); break;
         }
 
-        if (valA === null && valB !== null) return config.direction === 'asc' ? 1 : -1; 
-        if (valA !== null && valB === null) return config.direction === 'asc' ? -1 : 1; 
+        if (valA === null && valB !== null) return config.direction === 'asc' ? 1 : -1;
+        if (valA !== null && valB === null) return config.direction === 'asc' ? -1 : 1;
         if (valA === null && valB === null) return 0;
 
 
@@ -856,20 +859,20 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
             if (valA < valB) return config.direction === 'asc' ? -1 : 1;
             if (valA > valB) return config.direction === 'asc' ? 1 : -1;
         }
-        
+
         if (config.key !== 'name') {
             return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
         }
         return 0;
     });
   };
-  
+
   const handleHorseSortChange = (key: HorseSortKey) => {
     if (horseListSortConfig.key === key) {
       setHorseListSortConfig({ key, direction: horseListSortConfig.direction === 'asc' ? 'desc' : 'asc' });
     } else {
       const defaultDirection = (key === 'name' || key === 'best400m' || key === 'bestLast400m') ? 'asc' : 'desc';
-      setHorseListSortConfig({ key, direction: defaultDirection }); 
+      setHorseListSortConfig({ key, direction: defaultDirection });
     }
   };
 
@@ -882,7 +885,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
   const renderPlayerSetup = () => (
     <div className="p-6 bg-surface-card shadow-xl rounded-lg max-w-2xl mx-auto my-10">
       <h2 className="text-2xl font-bold text-brand-secondary mb-6 text-center">Game Setup</h2>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-6">
         <div>
             <label htmlFor="numPlayers" className="block text-sm font-medium text-text-secondary mb-1">Number of Players (1-{MAX_PLAYERS})</label>
@@ -940,7 +943,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
             <InformationCircleIcon className="h-4 w-4 ml-1 text-gray-400 cursor-help" title="If unchecked, all horses start as 2-3yo Maidens with no race history."/>
         </div>
       </div>
-      
+
       {Array.from({ length: numberOfPlayersForSetup }).map((_, index) => (
         <div key={index} className="mb-3">
           <label htmlFor={`playerName${index}`} className="block text-xs font-medium text-text-secondary mb-0.5">Player {index + 1} Name</label>
@@ -966,7 +969,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
       </button>
     </div>
   );
-  
+
   const renderRaceTrack = () => {
     if (isFastForwardingRaceEnd) {
         return (
@@ -977,7 +980,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
     }
 
     if (!currentRace || simulationSnapshots.length === 0) return null;
-    
+
     const rawRaceDistance = parseInt(currentRace.distance.replace('m', ''));
     if (isNaN(rawRaceDistance) || rawRaceDistance <= 0) {
       console.error("Error: raceDistanceMeters is not a positive number in renderRaceTrack.", currentRace.distance, rawRaceDistance);
@@ -990,7 +993,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
       console.error("Error: Snapshot or participantStates missing in renderRaceTrack. Index:", currentSnapshotIndex, "Snapshot data:", snapshot);
       return <div className="text-red-500 p-4 bg-white rounded-md shadow">Error: Missing simulation data for this frame.</div>;
     }
-     if (snapshot.participantStates.length === 0 && currentRace.participants.length > 0) { 
+     if (snapshot.participantStates.length === 0 && currentRace.participants.length > 0) {
         return (
             <div className="my-6 p-4 bg-gray-800 rounded-lg shadow-inner relative overflow-hidden text-white text-center">
                 Waiting for simulation data... (Snapshot participant states empty, current race has participants)
@@ -1014,11 +1017,11 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
          <div className="absolute top-2 right-2 text-xs text-gray-300 z-30">
           Segment: {snapshot.segment}
         </div>
-        
+
         {/* Key/Legend for Bars */}
         <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 p-2 rounded-md shadow-lg text-white text-xs z-40">
           <div className="flex items-center mb-1">
-            <KeyIcon className="h-3.5 w-3.5 mr-1 text-yellow-400"/> 
+            <KeyIcon className="h-3.5 w-3.5 mr-1 text-yellow-400"/>
             <span className="font-semibold">Key:</span>
           </div>
           <div className="flex items-center mb-1">
@@ -1028,8 +1031,8 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
           <div className="flex items-center mb-0.5">
             <span className="w-12 inline-block mr-1 text-gray-300">Stamina:</span>
             <div title="Example Stamina (Average)" className="w-8 h-1.5 bg-gray-700 rounded-sm overflow-hidden">
-              <div 
-                className="h-full rounded-sm" 
+              <div
+                className="h-full rounded-sm"
                 style={{ width: `50%`, backgroundColor: getBarColor(0.5) }}
               ></div>
             </div>
@@ -1037,8 +1040,8 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
           <div className="flex items-center">
             <span className="w-12 inline-block mr-1 text-gray-300">Speed:</span>
             <div title="Example Speed (Good)" className="w-8 h-1.5 bg-gray-700 rounded-sm overflow-hidden">
-              <div 
-                className="h-full rounded-sm" 
+              <div
+                className="h-full rounded-sm"
                 style={{ width: `70%`, backgroundColor: getBarColor(0.7) }}
               ></div>
             </div>
@@ -1050,7 +1053,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
           <div className="absolute text-white text-[10px] font-semibold tracking-wider z-10"
              style={{
                 top: '50%',
-                right: 'calc(5% + 3px)', 
+                right: 'calc(5% + 3px)',
                 transform: 'translateY(-50%) rotate(-90deg)',
              }}
           >FINISH</div>
@@ -1066,7 +1069,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                       </div>
                     );
                 }
-                
+
                 let calculatedProgressPercent = (ps.distanceCovered / raceDistanceMeters) * 100 * 0.95;
                 if (typeof ps.distanceCovered !== 'number' || isNaN(ps.distanceCovered) || !isFinite(ps.distanceCovered)) {
                     calculatedProgressPercent = 0;
@@ -1076,19 +1079,19 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                 const progressPercent = Math.min(100, Math.max(0, calculatedProgressPercent));
 
                 const horseColorClass = horseSpriteColors[participantDetails.gate % horseSpriteColors.length];
-                
+
                 let verticalCalcValue = 0;
                 if (snapshot.participantStates.length > 0) {
                     verticalCalcValue = (index / snapshot.participantStates.length) * 90 + 5;
                 }
-                const verticalPosition = `${verticalCalcValue}%`; 
+                const verticalPosition = `${verticalCalcValue}%`;
 
-                const horseStatusFromSnapshot = ps.status; 
+                const horseStatusFromSnapshot = ps.status;
                 const horseNameDisplay = typeof participantDetails.horse.name === 'string' ? participantDetails.horse.name.substring(0,12) : "Unknown";
 
                 return (
-                  <div 
-                    key={ps.horseId} 
+                  <div
+                    key={ps.horseId}
                     className="absolute transition-all duration-100 ease-linear flex items-start z-20" // items-start for vertical alignment
                     style={{ left: `${progressPercent}%`, top: verticalPosition, transitionTimingFunction: 'linear' }}
                     title={`${horseNameDisplay} (#${participantDetails.gate}) - Speed: ${(typeof ps.currentSpeed === 'number' ? ps.currentSpeed.toFixed(1) : 'N/A')} m/s, Fatigue: ${(typeof ps.fatigue === 'number' ? ps.fatigue.toFixed(0) : 'N/A')}%`}
@@ -1104,21 +1107,21 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                         </span>
                         {/* Stamina Bar (from fatigue) */}
                         <div title={`Stamina: ${((100 - (ps.fatigue || 0))).toFixed(0)}%`} className="w-10 h-1 bg-black bg-opacity-50 rounded-sm overflow-hidden my-0.5">
-                        <div 
-                            className="h-full rounded-sm transition-all duration-100 ease-linear" 
-                            style={{ 
-                            width: `${Math.max(0, Math.min(100, (100 - (ps.fatigue || 0))))}%`, 
-                            backgroundColor: getBarColor((100 - (ps.fatigue || 0)) / 100) 
+                        <div
+                            className="h-full rounded-sm transition-all duration-100 ease-linear"
+                            style={{
+                            width: `${Math.max(0, Math.min(100, (100 - (ps.fatigue || 0))))}%`,
+                            backgroundColor: getBarColor((100 - (ps.fatigue || 0)) / 100)
                             }}
                         ></div>
                         </div>
                         {/* Speed Bar */}
                         <div title={`Speed: ${(((ps.currentSpeed || 0) / MAX_SPEED_MPS) * 100).toFixed(0)}% of max`} className="w-10 h-1 bg-black bg-opacity-50 rounded-sm overflow-hidden">
-                        <div 
-                            className="h-full rounded-sm transition-all duration-100 ease-linear" 
-                            style={{ 
-                            width: `${Math.max(0, Math.min(100, ((ps.currentSpeed || 0) / MAX_SPEED_MPS) * 100))}%`, 
-                            backgroundColor: getBarColor((ps.currentSpeed || 0) / MAX_SPEED_MPS) 
+                        <div
+                            className="h-full rounded-sm transition-all duration-100 ease-linear"
+                            style={{
+                            width: `${Math.max(0, Math.min(100, ((ps.currentSpeed || 0) / MAX_SPEED_MPS) * 100))}%`,
+                            backgroundColor: getBarColor((ps.currentSpeed || 0) / MAX_SPEED_MPS)
                             }}
                         ></div>
                         </div>
@@ -1140,7 +1143,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
       <LoadingSpinner size="lg" message="Initializing Your Racing Empire..." />
     </div>
   );
-  
+
   const currentPlayerForBetting = players.find(p => p.id === currentPlayerId);
   const currentMaxBet = currentPlayerForBetting ? Math.floor(currentPlayerForBetting.currency * 0.5) : MIN_BET_AMOUNT;
   const sortedHorsesForModal = sortHorses(allHorses, horseListSortConfig);
@@ -1152,7 +1155,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
     {key: 'bestLast400m', label: 'Best Last 400m'}
   ];
 
-  const sortedParticipantsForMCModal = (currentRace && monteCarloDebugData) 
+  const sortedParticipantsForMCModal = (currentRace && monteCarloDebugData)
     ? [...currentRace.participants]
       .map(p => ({
         ...p,
@@ -1185,7 +1188,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                 ))}
             </div>
         )}
-        
+
         {gameStage === 'setup' && renderPlayerSetup()}
         {isMonteCarloRunning && <LoadingSpinner message="Calculating odds with Monte Carlo simulation..." />}
 
@@ -1207,7 +1210,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                     <ListBulletIcon className="h-5 w-5 mr-2" /> View All Horses ({allHorses.length})
                 </button>
                  <button
-                    onClick={() => setShowGradeHelpModal(true)} 
+                    onClick={() => setShowGradeHelpModal(true)}
                     className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center shadow hover:shadow-lg"
                     aria-label="Horse Grades Explained"
                     >
@@ -1268,7 +1271,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                         <p className="mb-2 text-xs text-text-secondary">Odds: {gameLogic.formatOddsForDisplay(currentRace.participants.find(p=>p.horse.id === selectedHorseForBet?.id)?.odds)}</p>
                         <div className="mb-3">
                             <label htmlFor="betType" className="block text-xs font-medium text-text-secondary">Bet Type</label>
-                            <select 
+                            <select
                             id="betType" value={betType} onChange={(e) => setBetType(e.target.value as BetType)}
                             className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary text-sm bg-white text-text-primary"
                             >
@@ -1288,7 +1291,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                         </button>
                         </>
                     ) : ( <p className="text-sm text-text-secondary italic">Select a horse from the list to place a bet.</p> )}
-                    
+
                     <button onClick={handleDoneBettingOrPass} className="mt-4 w-full px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors font-semibold flex items-center justify-center">
                         <SkipTurnIcon className="h-5 w-5 mr-2"/> Done Betting / Pass Turn
                     </button>
@@ -1299,7 +1302,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                     <div className="p-4 bg-white shadow-lg rounded-lg">
                         <h4 className="text-md font-semibold text-brand-secondary mb-2">Your Bets This Race:</h4>
                         <ul className="space-y-2 text-xs max-h-40 overflow-y-auto">
-                        {activeBetsThisRace[currentPlayerId].map((bet, index) => {
+                        {currentPlayerId && activeBetsThisRace[currentPlayerId]?.map((bet: Bet, index: number) => {
                             const horseName = currentRace?.participants.find(p => p.horse.id === bet.horseId)?.horse.name || 'Unknown Horse';
                             const potentialPayout = bet.stake * bet.oddsAtBetTime;
                             return (
@@ -1331,8 +1334,8 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                         }
 
                         return (
-                        <div key={p.horse.id} 
-                            className={`p-3 border rounded-md ${!isAutopilotMode ? 'cursor-pointer hover:shadow-lg' : ''} transition-all
+                        <div key={p.horse.id}
+                          className={`p-3 border rounded-md ${!isAutopilotMode ? 'cursor-pointer hover:shadow-lg' : ''} transition-all
                                         ${selectedHorseForBet?.id === p.horse.id && !isAutopilotMode ? 'border-brand-primary ring-2 ring-brand-primary bg-emerald-50' : 'border-gray-200 hover:border-gray-300'}`}
                             onClick={() => !isAutopilotMode && setSelectedHorseForBet(p.horse)}
                             role="button" aria-pressed={selectedHorseForBet?.id === p.horse.id && !isAutopilotMode} tabIndex={isAutopilotMode ? -1 : 0}
@@ -1340,7 +1343,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="font-semibold text-md text-brand-secondary">
-                                    #{p.gate} {p.horse.name} 
+                                    #{p.gate} {p.horse.name}
                                     {p.horse.isLegendary && <StarIcon className="h-4 w-4 inline text-yellow-400 ml-1" title="Legendary Horse"/>}
                                     {formString && <span className="text-xs text-gray-500 ml-1.5">({formString})</span>}
                                 </p>
@@ -1411,7 +1414,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                     {raceResults.map((resultEntry) => {
                       const prizeMoney = currentRace ? gameLogic.getPrizeDistribution(currentRace.purse, resultEntry.finishPosition, currentRace.participants.length, !!resultEntry.participant.status) : 0;
                       const horseGlobalStats = allHorses.find(h => h.id === resultEntry.participant.horse.id);
-                      
+
                       let isPersonalBest400m = false;
                       if (resultEntry.best400mTimeForThisRace !== null && horseGlobalStats) {
                           if (resultEntry.best400mTimeForThisRace === horseGlobalStats.best400mTimeSecs) {
@@ -1429,10 +1432,10 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                       return (
                         <tr key={resultEntry.participant.horse.id} className={`${resultEntry.finishPosition === 1 && !resultEntry.participant.status ? 'bg-yellow-50' : ''}`}>
                           <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                            {resultEntry.participant.status 
-                                ? <span className="text-red-500 font-bold">DNF</span> 
-                                : resultEntry.finishPosition === 1 
-                                    ? <TrophyIcon className="h-5 w-5 text-amber-500 inline-block" /> 
+                            {resultEntry.participant.status
+                                ? <span className="text-red-500 font-bold">DNF</span>
+                                : resultEntry.finishPosition === 1
+                                    ? <TrophyIcon className="h-5 w-5 text-amber-500 inline-block" />
                                     : resultEntry.finishPosition
                             }
                           </td>
@@ -1453,8 +1456,8 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
                                 {isPersonalBestLast400m && <span className="ml-1 text-xs font-semibold text-green-600">(PB)</span>}
                            </td>
                            <td className="px-4 py-2 whitespace-nowrap text-sm">
-                            {resultEntry.participant.status 
-                                ? <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">{resultEntry.participant.status.replace('_', ' ')}</span> 
+                            {resultEntry.participant.status
+                                ? <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">{resultEntry.participant.status.replace('_', ' ')}</span>
                                 : <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Finished</span>}
                           </td>
                           <td className="px-4 py-2 whitespace-nowrap text-sm text-green-600 font-semibold">${prizeMoney.toLocaleString()}</td>
@@ -1493,7 +1496,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
         )}
 
       </main>
-      
+
       <Modal isOpen={showHorseListModal} onClose={() => setShowHorseListModal(false)} title={`All Horses (${allHorses.length}) / Jockeys (${allJockeys.length})`} size="7xl">
         <div className="mb-4 flex flex-wrap gap-2 items-center">
             <span className="text-sm font-medium mr-2">Sort by:</span>
@@ -1521,7 +1524,7 @@ Ensure the output is valid JSON. Do not include any markdown formatting like \`\
           <HorseCard horse={selectedHorseForDetails} showFullStats={true} />
         </Modal>
       )}
-      
+
       {showGradeHelpModal && (
         <Modal isOpen={showGradeHelpModal} onClose={() => setShowGradeHelpModal(false)} title="Horse Grades Explained" size="2xl">
             <div className="space-y-4">

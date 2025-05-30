@@ -60,3 +60,17 @@
     *   **Weather Effects (Dynamic Rain, Wind) (Idea II):** Simulating dynamic weather changes (e.g., rain starting mid-race meet, changing track conditions) and wind affecting race dynamics.
     *   **Multiple Tracks (Varied Layouts Affecting Sim) (Idea III):** Going beyond just different names or surface types to have track layouts (e.g., length of stretch, turn radius) that genuinely impact race simulation.
     *   **Paddock View (Visual Horse Models) (Idea III):** If this involves creating and displaying distinct visual models for horses in the paddock for inspection, rather than just text clues.
+
+
+** Next **
+
+1. Add information about the current race in the race screen.  Track, Race Name, Distance, Ground, Prize, Group/Class
+2. don't add horses with low stamina to long races.
+3. change the gemini race summary to use something else (local)
+4. horse strategy.   If a horse slows and tires before the end of a race help it to learn to run slower. Likewise, if a horse has stamina left at the end of a race help it learn to run faster.  This improvement will be based on the skill of the Jockey.
+5. odds need to be better
+6. Racing News additions and improvements
+more names for horses
+breeding lines after retirement
+multiple bets per player
+betting slips
