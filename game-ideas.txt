@@ -1,0 +1,62 @@
+
+**LOW Implementation Risk**
+
+*   **High Gameplay Improvement:**
+    *   DONE - **Jockey Weight Impact in Sim (Idea II):** Integrating jockey weight into the race simulation, if not already deeply factored.
+    *   DONE - **Clear Betting Interface (Review/Refine) (Idea I):** Ensuring the bet slip is intuitive, potential payouts are clearly displayed, and refining the overall betting UI/UX. Small tweaks here can greatly improve usability.
+*   **Medium Gameplay Improvement:**
+    *   **Crowd Sounds & Atmosphere (Idea III):** Adding ambient crowd noises, cheers, and other atmospheric sounds to enhance immersion during races.
+    *   DONE - **Expanded Horse Adaptability (Idea II):** Refining how horses perform on different track conditions or distances, perhaps by making the existing "preferredTrackCondition" more nuanced or adding a simple adaptability stat. This leverages existing systems.
+    *   DONE - **Race Data (Expanded - Basic Surface Types) (Idea I):** Clearly distinguishing between basic surface types like "Dirt" and "Turf" for races and horse preferences, with a straightforward impact on performance in the simulation. (TrackCondition serves this role)
+*   **Low Gameplay Improvement:**
+    *   *(No items fit well here; most low-risk changes offer at least medium gameplay improvement in a simulation game.)*
+
+---
+
+**MEDIUM Implementation Risk**
+
+*   **High Gameplay Improvement:**
+    *   **Exotic Bets (Idea I):** Implementing Exacta, Quinella, Trifecta, Superfecta. This requires new betting logic and UI for selecting multiple horses but significantly expands betting strategy and appeal.
+    *   DONE - **Horse Data (Expanded - Comprehensive Form) (Idea I):** Adding more detailed horse information like weight carried, full recent form (last 5-10 races with all details), lifetime record, preferred distance, and running style. This is core for deeper handicapping. (Assuming pedigree here is a simple display, not a complex system yet).
+    *   DONE - **Realistic Pace Dynamics in Sim (Idea II):** Enhancing the simulation to better model race pace, such as how early speed horses perform versus closers, and the effects of different race fractions.
+    *   DONE - **Career Mode/Progression (Idea III):** Creating a structured progression system where players can advance through different tiers of races, tracks, and events. This adds long-term goals and replayability. (Horse grades, earnings, player currency management)
+    *   DONE - **Expanded Core Horse Stats (Idea II):** Adding 1-2 new core stats like "Agility" or "Heart/Will to Win" and integrating their effects into the race simulation for more nuanced horse performance. (Existing core stats: speed, stamina, acceleration, consistency, finishing kick)
+    *   DONE - **Explicit Track Surfaces (Dirt/Turf) & Deeper Impact (Idea II):** Beyond just a label, making dirt/turf a distinct characteristic that significantly affects horse performance and race generation, possibly with varying degrees of preference. (TrackCondition serves this role)
+*   **Medium-High Gameplay Improvement:**
+    *   DONE - **Jockey Data (Expanded Stats) (Idea I):** Tracking and displaying more detailed jockey statistics like recent form, win percentages with specific trainers/horses, or on particular tracks. (Career races, wins, win%, top3s)
+    *   DONE - **Dynamic Form Cycle for Horses (Idea II):** Implementing a more sophisticated system for how a horse's form (performance potential) changes over time, beyond simple updates after each race.
+    *   **Advanced Jockey AI & Race Plan Execution (Idea II):** Making jockey AI more sophisticated, allowing them to better execute race plans based on their specialty, the horse's strengths, and the race situation.
+    *   **Post-Race Analysis (Idea III):** Providing players with a breakdown of how the race unfolded, highlighting key moments or decisions, to help them understand the simulation and improve their handicapping.
+    *   **Unlockables (Idea III):** Tying into a career mode, allowing players to unlock access to more detailed stats, expert tipsters, or higher-stakes races as they progress.
+    *   **Achievements/Challenges (Idea III):** Adding a system for in-game achievements or specific betting challenges to provide additional goals.
+    *   DONE - **Official Ratings/Handicap (Idea I):** Introducing a numerical rating for each horse representing its perceived ability, calculated by the game. (Horse Grade serves this purpose)
+*   **Medium Gameplay Improvement:**
+    *   **Boxing/Wheeling for Exotics (Idea I):** Providing UI and logic to easily place combination bets for exotics (e.g., boxing three horses in a Trifecta).
+    *   DONE - **Opening Odds / Morning Line (Idea I):** Displaying an initial set of odds before the main Monte Carlo calculation, representing a "morning line." (originalOddsBeforeHobbyAdjustment)
+    *   **Photo Finishes (Idea III):** Implementing logic for very close finishes, with a special announcement, and perhaps a simplified visual representation.
+    *   **Tutorials (Idea III):** Creating in-game tutorials to explain different bet types, how to read the form guide, and basic handicapping strategies.
+    *   **Expert Picks/Tip Sheets (Idea III):** Including in-game "pundits" who offer (not always correct) race predictions.
+    *   DONE - **Global Historical Race Data Archive (Idea III):** Allowing players to look up results of all past races run in the game. (Individual horse race history)
+    *   **Paddock View (Text-Based Clues) (Idea III):** Before a race, showing text-based clues about a horse's condition (e.g., "appears calm," "is sweating").
+
+---
+
+**HIGH Implementation Risk**
+
+*   **High Gameplay Improvement:**
+    *   **Parimutuel Odds System & Live Odds Updates (Idea I):** Overhauling the odds system to be fully dynamic, where odds fluctuate based on a simulated betting pool as bets (from player or simulated public) come in. This is a major change but adds significant realism and dynamism.
+    *   **Multi-Race Bets (Idea I):** Implementing bets like Daily Double, Pick 3/4/6. This involves complex UI, tracking bets across multiple sequential races, and complicated payout logic.
+    *   **Hidden Horse Stats/Quirks (Idea II):** Adding stats like "dislikes being boxed in," "prefers running on the outside," or other behavioral quirks that manifest during the race. This requires very complex AI and simulation logic.
+    *   **Traffic & Interference in Sim (Idea II):** Simulating realistic race incidents like horses getting boxed in, checked by others, or having to take a wide path. This involves advanced spatial AI and collision detection within the simulation.
+    *   **Enhanced Race Graphics & Camera Angles (Idea III):** Moving from the current abstract race visualization to more detailed 2D or even basic 3D graphics with multiple camera angles. This is a very significant art and development effort.
+    *   **Authentic Race Commentary (Dynamic) (Idea III):** Generating dynamic text or (even more complex) audio commentary that accurately and engagingly describes the race as it happens. This could potentially leverage AI like Gemini but would be a complex integration.
+    *   **In-Depth Pedigree System (Idea IV):** Creating a system where horses have parents, and bloodlines influence their stats, potential, and preferences through genetic inheritance. This adds incredible depth, especially if linked to horse breeding.
+    *   **"Living World" Feel (Idea IV):** Implementing systems for news (e.g., major wins, retirements), rivalries between jockeys/trainers, and horses developing reputations. This requires significant event management and content generation.
+    *   **Trainer Data & Influence (Idea I & II):** Introducing "Trainers" as distinct entities who have their own stats, specialties, and actively influence horse conditioning, race readiness, and strategic race placement.
+*   **Medium-High Gameplay Improvement:**
+    *   **Injury Proneness & Recovery System (Idea II):** Adding a system for horse injuries (minor to major), recovery times, and their impact on stats and ability to race. This adds a significant layer of realism and management.
+    *   **Advanced Handicapping Tools (Idea IV):** Allowing players to create their own custom speed figures, track biases, or use complex data filters for deep analysis.
+*   **Medium Gameplay Improvement:**
+    *   **Weather Effects (Dynamic Rain, Wind) (Idea II):** Simulating dynamic weather changes (e.g., rain starting mid-race meet, changing track conditions) and wind affecting race dynamics.
+    *   **Multiple Tracks (Varied Layouts Affecting Sim) (Idea III):** Going beyond just different names or surface types to have track layouts (e.g., length of stretch, turn radius) that genuinely impact race simulation.
+    *   **Paddock View (Visual Horse Models) (Idea III):** If this involves creating and displaying distinct visual models for horses in the paddock for inspection, rather than just text clues.
